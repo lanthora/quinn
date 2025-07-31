@@ -122,66 +122,7 @@ impl UdpSocketState {
             }
         }
 
-        let mut may_fragment = false;
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        {
-            // opportunistically try to enable GRO. See gro::gro_segments().
-            let _ = set_socket_option(&*io, libc::SOL_UDP, gro::UDP_GRO, OPTION_ON);
-
-            // Forbid IPv4 fragmentation. Set even for IPv6 to account for IPv6 mapped IPv4 addresses.
-            // Set `may_fragment` to `true` if this option is not supported on the platform.
-            may_fragment |= !set_socket_option_supported(
-                &*io,
-                libc::IPPROTO_IP,
-                libc::IP_MTU_DISCOVER,
-                libc::IP_PMTUDISC_PROBE,
-            )?;
-
-            if is_ipv4 {
-                set_socket_option(&*io, libc::IPPROTO_IP, libc::IP_PKTINFO, OPTION_ON)?;
-            } else {
-                // Set `may_fragment` to `true` if this option is not supported on the platform.
-                may_fragment |= !set_socket_option_supported(
-                    &*io,
-                    libc::IPPROTO_IPV6,
-                    libc::IPV6_MTU_DISCOVER,
-                    libc::IPV6_PMTUDISC_PROBE,
-                )?;
-            }
-        }
-        #[cfg(any(target_os = "freebsd", apple))]
-        {
-            if is_ipv4 {
-                // Set `may_fragment` to `true` if this option is not supported on the platform.
-                may_fragment |= !set_socket_option_supported(
-                    &*io,
-                    libc::IPPROTO_IP,
-                    libc::IP_DONTFRAG,
-                    OPTION_ON,
-                )?;
-            }
-        }
-        #[cfg(any(bsd, apple, solarish))]
-        // IP_RECVDSTADDR == IP_SENDSRCADDR on FreeBSD
-        // macOS uses only IP_RECVDSTADDR, no IP_SENDSRCADDR on macOS (the same on Solaris)
-        // macOS also supports IP_PKTINFO
-        {
-            if is_ipv4 {
-                set_socket_option(&*io, libc::IPPROTO_IP, libc::IP_RECVDSTADDR, OPTION_ON)?;
-            }
-        }
-
-        // Options standardized in RFC 3542
-        if !is_ipv4 {
-            set_socket_option(&*io, libc::IPPROTO_IPV6, libc::IPV6_RECVPKTINFO, OPTION_ON)?;
-            set_socket_option(&*io, libc::IPPROTO_IPV6, libc::IPV6_RECVTCLASS, OPTION_ON)?;
-            // Linux's IP_PMTUDISC_PROBE allows us to operate under interface MTU rather than the
-            // kernel's path MTU guess, but actually disabling fragmentation requires this too. See
-            // __ip6_append_data in ip6_output.c.
-            // Set `may_fragment` to `true` if this option is not supported on the platform.
-            may_fragment |=
-                !set_socket_option_supported(&*io, libc::IPPROTO_IPV6, IPV6_DONTFRAG, OPTION_ON)?;
-        }
+        let may_fragment = true;
 
         let now = Instant::now();
         Ok(Self {
